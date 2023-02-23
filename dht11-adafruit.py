@@ -15,8 +15,8 @@ WIFI_PASSWORD = 'Tertiary888'
 mqtt_client_id      = bytes('client_'+'123210', 'utf-8') # Just a random client ID
 
 ADAFRUIT_IO_URL     = 'io.adafruit.com' 
-ADAFRUIT_USERNAME   = 'krankschaft'
-ADAFRUIT_IO_KEY     = 'aio_QGRv06ni4ufY3SIV8znBu0uNKvcC'
+ADAFRUIT_USERNAME   = 'xxxxxx'
+ADAFRUIT_IO_KEY     = 'yyyyyy'
 
 TEMP_FEED_ID      = 'temperature'
 HUM_FEED_ID       = 'humidity'
