@@ -7,7 +7,7 @@ import network
 import time
 import sys
 
-sensor = dht.DHT11(Pin(4))
+led = Pin("LED",Pin.OUT)
 
 WIFI_SSID     = 'Tertiary infotech'
 WIFI_PASSWORD = 'Tertiary888'
@@ -18,8 +18,7 @@ ADAFRUIT_IO_URL     = 'io.adafruit.com'
 ADAFRUIT_USERNAME   = 'krankschaft'
 ADAFRUIT_IO_KEY     = 'aio_YCUQ68zYRkO7tj7oz9Fg0XAvRcTV'
 
-TEMP_FEED_ID      = 'temperature'
-HUM_FEED_ID       = 'humidity'
+TOGGLE_FEED_ID      = 'LED'
 
 def connect_wifi():
     wifi = network.WLAN(network.STA_IF)
@@ -35,11 +34,10 @@ def connect_wifi():
             time.sleep(1) 
     if(wifi.isconnected()):
         print('Connected!')
-        print('IP: ', wifi.ifconfig()[0])
     else:
         print('Not connected!')
-        sys.exit()
-      
+        sys.exit()      
+
 connect_wifi() # Connecting to WiFi Router 
 
 client = MQTTClient(client_id=mqtt_client_id, 
@@ -47,40 +45,37 @@ client = MQTTClient(client_id=mqtt_client_id,
                     user=ADAFRUIT_USERNAME, 
                     password=ADAFRUIT_IO_KEY,
                     ssl=False)
+
 def connect_mqtt():
-    try:            
+    try:
+        print("Connecting to MQTT ...")
         client.connect()
     except Exception as e:
         print('Could not connect to MQTT server {}{}'.format(type(e).__name__, e))
         sys.exit()
-        
-connect_mqtt()
-            
-temp_feed = bytes('{:s}/feeds/{:s}'.format(ADAFRUIT_USERNAME, TEMP_FEED_ID), 'utf-8') # format - ~/feeds/temp
-hum_feed = bytes('{:s}/feeds/{:s}'.format(ADAFRUIT_USERNAME, HUM_FEED_ID), 'utf-8') # format - ~/feeds/hum
-    
-def sens_data(data):
-    sensor.measure()                    # Measuring 
-    temp = sensor.temperature()         # getting Temp
-    hum = sensor.humidity()
-    
-    try:
-        client.publish(temp_feed,    
-        bytes(str(temp), 'utf-8'),   # Publishing Temp feed to adafruit.io
-        qos=0)
-    
-        client.publish(hum_feed,    
-        bytes(str(hum), 'utf-8'),   # Publishing Hum feed to adafruit.io
-        qos=0)
-        
-    except:			# Handles exception in connection
-        connect_mqtt()
-        return
-    
-    print("Temperature : ", str(temp))
-    print("Humidity : " , str(hum))
-    print(' ')
-    
-timer = Timer(-1)
-timer.init(period=5000, mode=Timer.PERIODIC, callback = sens_data)
 
+connect_mqtt()
+
+
+def cb(topic, msg): # callback function
+    print('Received Data: Topic = {}, Msg = {}'.format(topic, msg))
+    received_data = str(msg, 'utf-8') # Receiving data 
+    if received_data == "ON":
+        print("on")
+        led.on()
+    if received_data == "off":
+        print("off")
+        led.off()
+        
+toggle_feed = bytes('{:s}/feeds/{:s}'.format(ADAFRUIT_USERNAME, TOGGLE_FEED_ID), 'utf-8') # format - ~/feeds/led
+
+client.set_callback(cb) # callback function
+client.subscribe(toggle_feed) # subscribing to particular topic
+    
+while True:
+    try:
+        client.check_msg() # non blocking function
+    except:
+        client.disconnect()
+        print("Error")
+        sys.exit()
