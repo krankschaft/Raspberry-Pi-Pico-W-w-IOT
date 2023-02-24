@@ -6,13 +6,16 @@ import dht
 import network
 import time
 import sys
+import os
 
+led = Pin("LED",Pin.OUT)
 sensor = dht.DHT11(Pin(4))
 
 WIFI_SSID     = 'Tertiary infotech'
 WIFI_PASSWORD = 'Tertiary888'
 
-mqtt_client_id      = bytes('client_'+'123210', 'utf-8') # Just a random client ID
+random_num = int.from_bytes(os.urandom(3), 'little')
+mqtt_client_id      = bytes('client_'+str(random_num), 'utf-8') # Just a random client ID
 
 ADAFRUIT_IO_URL     = 'io.adafruit.com' 
 ADAFRUIT_USERNAME   = 'krankschaft'
@@ -20,6 +23,7 @@ ADAFRUIT_IO_KEY     = 'aio_YCUQ68zYRkO7tj7oz9Fg0XAvRcTV'
 
 TEMP_FEED_ID      = 'temperature'
 HUM_FEED_ID       = 'humidity'
+TOGGLE_FEED_ID    = 'LED'
 
 def connect_wifi():
     wifi = network.WLAN(network.STA_IF)
@@ -47,40 +51,63 @@ client = MQTTClient(client_id=mqtt_client_id,
                     user=ADAFRUIT_USERNAME, 
                     password=ADAFRUIT_IO_KEY,
                     ssl=False)
+
 def connect_mqtt():
-    try:            
+    try:
+        print("Connecting to MQTT ...")
         client.connect()
+        print("Connected to MQTT")
     except Exception as e:
         print('Could not connect to MQTT server {}{}'.format(type(e).__name__, e))
         sys.exit()
-        
+
 connect_mqtt()
-            
+
+toggle_feed = bytes('{:s}/feeds/{:s}'.format(ADAFRUIT_USERNAME, TOGGLE_FEED_ID), 'utf-8') # format - ~/feeds/led
 temp_feed = bytes('{:s}/feeds/{:s}'.format(ADAFRUIT_USERNAME, TEMP_FEED_ID), 'utf-8') # format - ~/feeds/temp
 hum_feed = bytes('{:s}/feeds/{:s}'.format(ADAFRUIT_USERNAME, HUM_FEED_ID), 'utf-8') # format - ~/feeds/hum
-    
+
+def cb(topic, msg): # callback function
+#     print('Received Data: Topic = {}, Msg = {}'.format(topic, msg))
+    received_data = str(msg, 'utf-8') # Receiving data
+    if topic == hum_feed:
+        val = float(received_data)
+        if val > 60.0:
+            print("Too humid !!!\n")
+            led.on()
+        else:
+            led.off()
+        
+client.set_callback(cb) # callback function
+client.subscribe(toggle_feed) # subscribing to particular topic
+client.subscribe(hum_feed) # subscribing to particular topic
+
 def sens_data(data):
     sensor.measure()                    # Measuring 
     temp = sensor.temperature()         # getting Temp
     hum = sensor.humidity()
-    
     try:
         client.publish(temp_feed,    
-        bytes(str(temp), 'utf-8'),   # Publishing Temp feed to adafruit.io
-        qos=0)
+                  bytes(str(temp), 'utf-8'),   # Publishing Temp feed to adafruit.io
+                  qos=0)
     
         client.publish(hum_feed,    
-        bytes(str(hum), 'utf-8'),   # Publishing Hum feed to adafruit.io
-        qos=0)
-        
-    except:			# Handles exception in connection
+                  bytes(str(hum), 'utf-8'),   # Publishing Hum feed to adafruit.io
+                  qos=0)
+    except:
         connect_mqtt()
         return
-    
     print("Temperature : ", str(temp))
-    print("Humidity : " , str(hum))
-    print(' ')
+    print("Humidity    : ", str(hum))
+    print()
     
 timer = Timer(-1)
 timer.init(period=5000, mode=Timer.PERIODIC, callback = sens_data)
 
+while True:
+    try:
+        client.wait_msg()
+    except KeyboardInterrupt:
+        print('Ctrl-C pressed...exiting')
+        client.disconnect()
+        sys.exit()
